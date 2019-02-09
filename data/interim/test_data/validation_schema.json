@@ -1,0 +1,40 @@
+{
+    "fields": [
+    	{
+    		"name": "date",
+    		"title": "Date",
+    		"description": "The datetime for the prediction, given in ISO8601 format (YYYY-MM-DDThh:mm:ssZ)",
+    		"type": "datetime",
+    		"format": "default",
+    		"constraints": {
+    			"unique": true,
+    			"required": true
+    		}
+    	},
+    	{
+    		"name": "rougher.output.recovery",
+    		"title": "Rougher zinc recovery fraction",
+    		"description": "The predicted recovery in % from the rougher, lying between 0 and 100",
+    		"type": "number",
+    		"format": "default",
+    		"constraints": {
+    			"required": true,
+    			"minimum": 0,
+    			"maximum": 100
+    		}
+    	},
+    	{
+    		"name": "final.output.recovery",
+    		"title": "Overall zinc recovery fraction",
+    		"description": "The predicted overall recovery in % from rougher + cleaners, lying between 0 and 100",
+    		"type": "number",
+    		"format": "default",
+    		"constraints": {
+    			"required": true,
+    			"minimum": 0,
+    			"maximum": 100
+    		}
+    	}
+    ],
+    "primaryKey": "date"
+}
