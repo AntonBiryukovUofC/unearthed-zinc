@@ -28,7 +28,7 @@ def main(root = None):
     df_all['day'] = df_all['date'].dt.day / df_all['date'].dt.daysinmonth
     df_all['month'] = df_all['date'].dt.month
     df_all['weekofyear'] = df_all['date'].dt.weekofyear
-    df_all.to_csv(f'{root}/data/processed/train_test_raw.csv')
+    df_all.to_csv(f'{root}/data/processed/train_test_raw.csv',index=False)
     # Get tsfresh:
     
     df_tsfresh_feats = get_tsfresh_features(df_all.drop(['hour','dow','day','month','weekofyear'],axis = 1))
