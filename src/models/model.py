@@ -14,7 +14,7 @@ class Model(object):
 
     def evaluate(self, X_val, y_val):
         pred_target = self.guess(X_val)
-        err = np.mean(np.abs((y_val - pred_target)))
+        err = mase(y_val,pred_target)
         result = err
         return result
 
@@ -33,26 +33,36 @@ class LinearModel(Model):
 
 class RF(Model):
 
-    def __init__(self, X_train, y_train, X_val, y_val):
+    def __init__(self, X_train, y_train, X_val, y_val,kwargs={}):
         super().__init__()
-        self.clf = RandomForestRegressor(n_estimators=200, verbose=True, max_depth=35, min_samples_split=2,
-                                         min_samples_leaf=2)
+        self.clf = RandomForestRegressor(**kwargs)
         self.clf.fit(X_train, y_train)
         print("Result on validation data: ", self.evaluate(X_val, y_val))
 
     def guess(self, feature):
-        return np.exp(self.clf.predict(feature))
+        return self.clf.predict(feature)
+
+
+class QuantileRF(Model):
+
+    def __init__(self, X_train, y_train, X_val, y_val,kwargs={},quantile = 50):
+        super().__init__()
+        self.clf = RandomForestRegressor(**kwargs)
+        self.clf.fit(X_train, y_train)
+        print("Result on validation data: ", self.evaluate(X_val, y_val))
+        self.quantile = quantile
+    def guess(self, feature):
+        return self.clf.predict(feature,self.quantile)
 
 
 class SVM(Model):
 
-    def __init__(self, X_train, y_train, X_val, y_val):
+    def __init__(self, X_train, y_train, X_val, y_val,kwargs={}):
         super().__init__()
         self.X_train = X_train
         self.y_train = y_train
         self.__normalize_data()
-        self.clf = SVR(kernel='linear', degree=3, gamma='auto', coef0=0.0, tol=0.001,
-                       C=1.0, epsilon=0.1, shrinking=True, cache_size=200, verbose=False, max_iter=-1)
+        self.clf = SVR(**kwargs)
 
         self.clf.fit(self.X_train, self.y_train)
         print("Result on validation data: ", self.evaluate(X_val, y_val))
@@ -77,11 +87,7 @@ class XGBoost(Model):
         dtrain = xgb.DMatrix(X_train, label=y_train)
         dvalid = xgb.DMatrix(X_val, label=y_val)
         evallist = [(dtrain, 'train'),(dvalid, 'valid')]
-
-
-
-
-        self.bst = xgb.train(params, dtrain, num_round, evallist,early_stopping_rounds = esr)
+        self.bst = xgb.train(params, dtrain, num_round, evallist,early_stopping_rounds = esr,verbose_eval=50)
         print("Result on validation data: ", self.evaluate(X_val, y_val))
 
     def guess(self, feature):
@@ -160,3 +166,36 @@ class KNN(Model):
 #     def guess(self, features):
 #         result = self.model.predict(features).flatten()
 #         return self._val_for_pred(result)
+def _mase_numeric_only(predicted, measured):
+
+    naive_forecast_error = np.abs(measured[1:] - measured[:-1]).mean()
+    forecast_error = \
+        np.abs(measured - np.nan_to_num(predicted)) / naive_forecast_error
+    return np.nanmean(forecast_error)
+
+def mase(predicted, measured, min_samples=3):
+
+    if min_samples < 2:
+        raise ValueError('mase.min_samples must be at least 2')
+
+    # Make sure we have numpy arrays
+    predicted = np.asarray(predicted)
+    measured = np.asarray(measured)
+
+    # Apply MASE over all the non-NaN slices with at least 3 hours of data
+    if np.isnan(measured).any():
+        segments = [
+            _mase_numeric_only(predicted[_slice], measured[_slice])
+            for _slice in np.ma.clump_unmasked(np.ma.masked_invalid(measured))
+            if abs(_slice.stop - _slice.start) > min_samples
+        ]
+        if not segments:
+            raise ValueError("Couldn't find any non-NaN segments longer than "
+                             "{} in measurements".format(min_samples))
+        score = np.mean(segments)
+    else:
+        if len(measured) < min_samples:
+            raise ValueError('Need at least {} samples to calculate MASE'.format(min_samples))
+        score = _mase_numeric_only(predicted, measured)
+
+    return score
