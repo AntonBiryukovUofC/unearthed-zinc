@@ -8,7 +8,7 @@ from sklearn.preprocessing import StandardScaler
 import xgboost as xgb
 from sklearn import neighbors
 from sklearn.preprocessing import Normalizer
-
+import keras
 
 class Model(object):
 
@@ -53,6 +53,19 @@ class QuantileRF(Model):
         self.quantile = quantile
     def guess(self, feature):
         return self.clf.predict(feature,self.quantile)
+
+class QuantileGB(Model):
+    def __init__(self, X_train, y_train, X_val, y_val,kwargs={},quantile = 50,n_estimators = 100):
+        super().__init__()
+        from sklearn.ensemble import GradientBoostingRegressor
+        self.quantile = quantile
+        self.clf = GradientBoostingRegressor(loss='quantile', alpha=quantile, n_estimators=n_estimators,**kwargs)
+        self.clf.fit(X_train, y_train)
+
+        print("Result on validation data: ", self.evaluate(X_val, y_val))
+
+    def guess(self, feature):
+        return self.clf.predict(feature)
 
 
 class SVM(Model):
@@ -125,47 +138,66 @@ class KNN(Model):
 
     def guess(self, feature):
         return self.clf.predict(self.normalizer.transform(feature))
+
+
+def tilted_loss(q, y, f):
+    e = (y - f)
+    return keras.backend.mean(keras.backend.maximum(q * e, (q - 1) * e),
+                              axis=-1)
+class QuantileKeras(Model):
+
+    def __init__(self, X_train, y_train, X_val, y_val,epochs = 100,lr = 0.001,quantile = 0.5,input_dim = 400,batch_size = 128):
+        super().__init__()
+        self.epochs = epochs
+        self.input_dim = input_dim
+        self.batch_size = batch_size
+        self.checkpointer = keras.callbacks.ModelCheckpoint(filepath="best_model_weights.hdf5", verbose=1, save_best_only=True)
+        self.early_stop = keras.callbacks.EarlyStopping(monitor='val_loss', patience=20)
+        self.__build_keras_model(lr)
+        X_train  = np.expand_dims(X_train, 1)
+        X_val = np.expand_dims(X_val, 1)
+        self.quantile = quantile
+        self.max_y = max(np.max(y_train),np.max(y_val))
+        self.fit(X_train, y_train, X_val, y_val)
+
+
+    def __build_keras_model(self,lr):
+        from keras.models import Sequential
+        from keras.layers import Dense,Activation
+        from keras.optimizers import Adam
+        self.model = Sequential()
+        self.model.add(Dense(1000, kernel_initializer="uniform", input_dim=self.input_dim))
+        self.model.add(Activation('relu'))
+        self.model.add(Dense(500, kernel_initializer="uniform"))
+        self.model.add(Activation('relu'))
+        self.model.add(Dense(1))
+        self.model.add(Activation('sigmoid'))
+
+        self.model.compile(loss=lambda y, f: tilted_loss(self.quantile, y, f), optimizer=Adam(lr=lr))
+
+    def _val_for_fit(self, val):
+        val = val / self.max_y
+        return val
+
+    def _val_for_pred(self, val):
+        return val * self.max_y
 #
-# class NN(Model):
-#
-#     def __init__(self, X_train, y_train, X_val, y_val):
-#         super().__init__()
-#         self.epochs = 10
-#         self.checkpointer = ModelCheckpoint(filepath="best_model_weights.hdf5", verbose=1, save_best_only=True)
-#         self.max_log_y = max(numpy.max(numpy.log(y_train)), numpy.max(numpy.log(y_val)))
-#         self.__build_keras_model()
-#         self.fit(X_train, y_train, X_val, y_val)
-#
-#     def __build_keras_model(self):
-#         self.model = Sequential()
-#         self.model.add(Dense(1000, kernel_initializer="uniform", input_dim=1183))
-#         self.model.add(Activation('relu'))
-#         self.model.add(Dense(500, kernel_initializer="uniform"))
-#         self.model.add(Activation('relu'))
-#         self.model.add(Dense(1))
-#         self.model.add(Activation('sigmoid'))
-#
-#         self.model.compile(loss='mean_absolute_error', optimizer='adam')
-#
-#     def _val_for_fit(self, val):
-#         val = numpy.log(val) / self.max_log_y
-#         return val
-#
-#     def _val_for_pred(self, val):
-#         return numpy.exp(val * self.max_log_y)
-#
-#     def fit(self, X_train, y_train, X_val, y_val):
-#         self.model.fit(X_train, self._val_for_fit(y_train),
-#                        validation_data=(X_val, self._val_for_fit(y_val)),
-#                        epochs=self.epochs, batch_size=128,
-#                        # callbacks=[self.checkpointer],
-#                        )
-#         # self.model.load_weights('best_model_weights.hdf5')
-#         print("Result on validation data: ", self.evaluate(X_val, y_val))
-#
-#     def guess(self, features):
-#         result = self.model.predict(features).flatten()
-#         return self._val_for_pred(result)
+    def fit(self, X_train, y_train, X_val, y_val):
+        self.model.fit(X_train, self._val_for_fit(y_train),
+                       validation_data=(X_val, self._val_for_fit(y_val)),
+                       epochs=self.epochs, batch_size=self.batch_size,
+                        callbacks=[self.checkpointer,self.early_stop],verbose =1)
+        # self.model.load_weights('best_model_weights.hdf5')
+        print("Result on validation data: ", self.evaluate(X_val, y_val))
+
+    def guess(self, features):
+        result = self.model.predict(features).flatten()
+        return self._val_for_pred(result)
+
+
+
+
+
 def _mase_numeric_only(predicted, measured):
 
     naive_forecast_error = np.abs(measured[1:] - measured[:-1]).mean()
@@ -199,3 +231,37 @@ def mase(predicted, measured, min_samples=3):
         score = _mase_numeric_only(predicted, measured)
 
     return score
+
+
+
+
+#     def __build_keras_model(self):
+#         self.model = Sequential()
+#         self.model.add(Dense(1000, kernel_initializer="uniform", input_dim=1183))
+#         self.model.add(Activation('relu'))
+#         self.model.add(Dense(500, kernel_initializer="uniform"))
+#         self.model.add(Activation('relu'))
+#         self.model.add(Dense(1))
+#         self.model.add(Activation('sigmoid'))
+#
+#         self.model.compile(loss='mean_absolute_error', optimizer='adam')
+#
+#     def _val_for_fit(self, val):
+#         val = numpy.log(val) / self.max_log_y
+#         return val
+#
+#     def _val_for_pred(self, val):
+#         return numpy.exp(val * self.max_log_y)
+#
+#     def fit(self, X_train, y_train, X_val, y_val):
+#         self.model.fit(X_train, self._val_for_fit(y_train),
+#                        validation_data=(X_val, self._val_for_fit(y_val)),
+#                        epochs=self.epochs, batch_size=128,
+#                        # callbacks=[self.checkpointer],
+#                        )
+#         # self.model.load_weights('best_model_weights.hdf5')
+#         print("Result on validation data: ", self.evaluate(X_val, y_val))
+#
+#     def guess(self, features):
+#         result = self.model.predict(features).flatten()
+#         return self._val_for_pred(result)
