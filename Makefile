@@ -25,7 +25,7 @@ data:
 	$(PYTHON_INTERPRETER) src/data/make_dataset.py
 
 split_data: 
-	$(PYTHON_INTERPRETER) src/data/split_data.py
+	$(PYTHON_INTERPRETER) src/data/split_all_data.py
 
 ## Delete all compiled Python files
 clean:
