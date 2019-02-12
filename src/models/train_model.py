@@ -2,6 +2,7 @@ from model import XGBoost, QuantileGB, SVM, QuantileRF
 import pandas as pd
 from sklearn.model_selection import TimeSeriesSplit
 import pickle
+import logging
 from pathlib import Path
 
 
@@ -14,10 +15,17 @@ if __name__ == '__main__':
     root = Path(__file__).resolve().parents[2]
     print(root)
     # Get raw features
-    with open(f'{root}/data/processed/data_split_by_year_test_train.pkl', 'wb') as f:
+    with open(f'{root}/data/processed/data_split_by_year_test_train.pkl', 'rb') as f:
         data_dict = pickle.load(f)
     # X_train is used for training and validation, X_test - final predictions (we have no labels for it)
     # Fix the year at 2016 for now
     X_train = data_dict[2016]['X_train']
     y_train = data_dict[2016]['y_train']
     print(f'X_train shape: {X_train.shape}, y_train: {y_train.shape}')
+    print(X_train.tail(5)['hour'])
+
+    # Set up crossvalidation procedure:
+    cv = TimeSeriesSplit(n_splits=8)
+
+
+
