@@ -3,6 +3,23 @@ unearthed-zinc
 
 project repo for zinc
 
+
+Ideas to try:
+====================
+
+This competition has a causality rule: that is, model predictions on a test dataset 
+cannot be inferred using future (e.g. unavailable information) training data. Therefore, in this case
+crossvalidation needs some careful thought.
+
+
+Here's ideas to try:
+
+- Build 2x2 models: 2 for each target, and 2 for each year:
+    + The model predicting on the end of 2016 can only use data prior to September 2016
+    + The model predicting on the end of 2017 can use data prior to that (i.e. the training set from 2016 + 
+        training from 2017)
+
+
 Project Organization
 ------------
 
