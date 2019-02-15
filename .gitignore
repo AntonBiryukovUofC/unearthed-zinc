@@ -88,4 +88,4 @@ target/
 .mypy_cache/
 
 # Data
-data/
+./data/
