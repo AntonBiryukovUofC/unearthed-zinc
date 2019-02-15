@@ -1,4 +1,4 @@
-from src.models.model import XGBoost, QuantileGB, SVM, QuantileRF,train_model,KNN
+from src.models.model import XGBoost, QuantileGB, SVM, QuantileRF,train_model,TimeSeriesSplitImproved,MondrianRF
 import pandas as pd
 import numpy as np
 from tqdm import trange
@@ -9,7 +9,7 @@ import pandas as pd
 
 import logging
 from pathlib import Path
-
+import matplotlib.pyplot as plt
 
 
 def main(year,tgt):
@@ -21,11 +21,12 @@ def main(year,tgt):
 
     log_fmt = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     logging.basicConfig(level=logging.INFO, format=log_fmt)
-    #tgt = 'final.output.recovery'
+   # tgt = 'final.output.recovery'
     #tgt = 'rougher.output.recovery'
 
-    #year = 2016
+    #year = 2017
     note = '_1'
+    mod = 'mond'
     # not used in this stub but often useful for finding various file
     root = Path(__file__).resolve().parents[2]
     print(root)
@@ -37,41 +38,39 @@ def main(year,tgt):
     #X_train = data_dict[year]['X_train']
     #y_train = data_dict[year]['y_train']
 
-    X = data_dict[year]['X_train']
+    X = data_dict[year]['X_train_pca']
     y = data_dict[year]['y_train']
     print(f'X_train shape: {X.shape}, y_train: {y.shape}')
 
-    X_test = data_dict[year]['X_test']
-    inds = (X['rougher.input.feed_zn'] > 0.5).index
+    X_test = data_dict[year]['X_test_pca']
+    #inds = (X['rougher.input.feed_zn'] > 0.5).index
+    ### CHECK IF SAMPLING IS ON!
     inds_y = y[(y[tgt] > 5) & (y[tgt] < 100)].index
-    inds_common = inds_y.intersection(inds)
+    inds_common = inds_y
 
     X = X.loc[inds_common,]
     y = y.loc[inds_common, tgt]
 
-    param_grids = {'n_neighbors': [5,10],
+    param_grids = {
+                   'min_samples_split':[2,6,10,15,25],
+                   'max_depth': [6,8,10,14,16],
                    }
     default = {
-               'n_jobs': 6
+                'n_estimators':100,
+               'n_jobs': -1,
+                'random_state':123
                }
 
     # n_estimators: Any = 10,
-    # criterion: Any = 'mse',
     # max_depth: Any = None,
     # min_samples_split: Any = 2,
-    # min_samples_leaf: Any = 1,
-    # min_weight_fraction_leaf: Any = 0.0,
-    # max_features: Any = 'auto',
-    # max_leaf_nodes: Any = None,
-    # bootstrap: Any = True,
-    # oob_score: Any = False,
-    # n_jobs: Any = 1,
-    # random_state: Any = None,
-    # verbose: Any = 0,
-    # warm_start: Any = False) -> None
 
     grids = ParameterGrid(param_grids)
-    cv = TimeSeriesSplit(n_splits=5)
+    Nmonths_total = 8
+    Nspl = int(Nmonths_total * 30 / 10)
+    Nmonths_test = 4
+    Nmonths_min_train = 2.5
+    cv = TimeSeriesSplitImproved(n_splits=Nspl)
 
     mus = []
     sds = []
@@ -79,10 +78,23 @@ def main(year,tgt):
     for i in trange(len(grids)):
         g = grids[i]
         g = {**g, **default}
-        scores, mu, sd, m = train_model(X, y, cv, model=KNN, params=g)
+        scores, mu, sd, m = train_model(X, y, cv, model=MondrianRF, params=g,fixed_length=False, train_splits=Nspl // Nmonths_total * Nmonths_min_train, test_splits=int(Nmonths_test / Nmonths_total * Nspl))
         grids_full.append(g)
         mus.append(mu)
         sds.append(sd)
+
+    # Plot the figures!:
+    mus = np.array(mus)
+    sds = np.array(sds)
+    fig, ax = plt.subplots(figsize=(20, 10))
+    ax.fill_between(np.arange(len(grids)), y1=mus - sds, y2=mus + sds)
+    ax.plot(np.arange(len(grids)), mus, '-r')
+
+    labs = [str(g) for g in grids_full]
+    ax.set_xticks(np.arange(len(grids_full)))
+    ax.set_xticklabels(labs, rotation=90)
+
+    fig.savefig(f'{root}/results/{mod}_{tgt}_{year}_{note}.png')
 
     id_grid = np.argmin(mus)
     grid_best = grids_full[id_grid]
@@ -91,19 +103,18 @@ def main(year,tgt):
     ypred= m.predict(X_test)
     preds = pd.DataFrame(data = {'date':X_test.index, tgt:ypred})
 
-    preds.to_csv(f'{root}/results/KNN_{tgt}_{year}_{note}.csv',index=False)
-
-
-
+    preds.to_csv(f'{root}/results/{mod}_{tgt}_{year}_{note}.csv',index=False)
+    with open(f'{root}/results/{mod}_{tgt}_{year}_{note}.pkl', 'wb') as f:
+        pickle.dump(m.model, f)
+if __name__ == '__main__':
+    # tgt = 'final.output.recovery'
+    # tgt = 'rougher.output.recovery'
+    # year = 2016
+    for y in [2017]:
+        for tgt in ['rougher.output.recovery','final.output.recovery']:
+            main(y, tgt)
     # grids[14]
     # Set up crossvalidation procedure:
 
 
 
-if __name__ == '__main__':
-    # tgt = 'final.output.recovery'
-    # tgt = 'rougher.output.recovery'
-     # year = 2016
-    for y in [2016,2017]:
-        for tgt in ['final.output.recovery','rougher.output.recovery']:
-            main(y,tgt)

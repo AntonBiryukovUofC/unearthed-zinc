@@ -88,4 +88,8 @@ target/
 .mypy_cache/
 
 # Data
-data/
+./data/
+results/
+./results/
+results/
+*.pkl

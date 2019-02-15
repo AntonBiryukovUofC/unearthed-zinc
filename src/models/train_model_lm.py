@@ -1,4 +1,4 @@
-from src.models.model import XGBoost, QuantileGB, SVM, QuantileRF,train_model,KNN
+from src.models.model import XGBoost, QuantileGB, SVM, QuantileRF,train_model,KNN,LinearModel
 import pandas as pd
 import numpy as np
 from tqdm import trange
@@ -49,12 +49,10 @@ def main(year,tgt):
     X = X.loc[inds_common,]
     y = y.loc[inds_common, tgt]
 
-    param_grids = {'n_neighbors': [5,10],
-                   }
-    default = {
-               'n_jobs': 6
-               }
+    param_grids = {"alpha": [0.0001, 0.001, 0.01,1, 10],
+                   "l1_ratio": np.arange(0.0, 1.0, 0.1)}
 
+    default = {}
     # n_estimators: Any = 10,
     # criterion: Any = 'mse',
     # max_depth: Any = None,
@@ -79,7 +77,7 @@ def main(year,tgt):
     for i in trange(len(grids)):
         g = grids[i]
         g = {**g, **default}
-        scores, mu, sd, m = train_model(X, y, cv, model=KNN, params=g)
+        scores, mu, sd, m = train_model(X, y, cv, model=LinearModel, params=g)
         grids_full.append(g)
         mus.append(mu)
         sds.append(sd)
@@ -91,7 +89,7 @@ def main(year,tgt):
     ypred= m.predict(X_test)
     preds = pd.DataFrame(data = {'date':X_test.index, tgt:ypred})
 
-    preds.to_csv(f'{root}/results/KNN_{tgt}_{year}_{note}.csv',index=False)
+    preds.to_csv(f'{root}/results/LM_{tgt}_{year}_{note}.csv',index=False)
 
 
 
