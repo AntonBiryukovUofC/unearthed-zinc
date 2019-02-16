@@ -42,10 +42,10 @@ def split_data(root):
                         'X_test_ts': X_test_ts, 'X_train_pca': X_train_pca, 'X_test_pca': X_test_pca}
 
     data_dict[2019] =  {'X_train': pd.concat([data_dict[2016]['X_train'],data_dict[2017]['X_train'],data_dict[2018]['X_train']]),
-                        'X_test': pd.concat([data_dict[2016]['X_test'],data_dict[2017]['X_test'],data_dict[2018]['X_test']]),
+                        'X_test': pd.concat([data_dict[2016]['X_test'],data_dict[2017]['X_test']]),
                         "y_train": pd.concat([data_dict[2016]['y_train'],data_dict[2017]['y_train'],data_dict[2018]['y_train']]),
                         'X_train_ts': pd.concat([data_dict[2016]['X_train_ts'],data_dict[2017]['X_train_ts'],data_dict[2018]['X_train_ts']]),
-                        'X_test_ts': pd.concat([data_dict[2016]['X_test_ts'],data_dict[2017]['X_test_ts'],data_dict[2018]['X_test_ts']])
+                        'X_test_ts': pd.concat([data_dict[2016]['X_test_ts'],data_dict[2017]['X_test_ts']])
                         #'X_train_pca': X_train_pca,
                         #'X_test_pca': X_test_pca
                          }

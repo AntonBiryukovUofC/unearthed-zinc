@@ -3,9 +3,9 @@ import logging
 from pathlib import Path
 import zipfile
 
-DROPCOLS = ['rougher.input.floatbank10_copper_sulfate',
+DROPCOLS = ['rougher.input.floatbank11_copper_sulfate',
             'rougher.input.floatbank10_xanthate',
-            'rougher.state.floatbank10_b_air',
+            'rougher.state.floatbank10_c_air',
             'rougher.state.floatbank10_e_air',
             'rougher.state.floatbank10_f_air',
             'primary_cleaner.state.floatbank8_b_air',
@@ -47,20 +47,21 @@ def main(root=None):
     # Fill NAs by propagating last available value
     df_all = pd.concat([df_train[cols], df_test], keys=['train', 'test']).fillna(method='ffill')
     print(f'Train shape = {df_train.shape} , test shape = {df_test.shape}')
-    # We need to time-dependent features into cyclical:
+    df_culled = df_all.copy()
+    df_culled =df_culled.drop(DROPCOLS,axis= 1)
 
 
+    #cols_10_floatbank_air =[f'rougher.state.floatbank10_{i}_air' for i in ['bcdef']]
+    #cols_10_floatbank_lvl = [f'rougher.state.floatbank10_{i}_level' for i in ['abcdef']]
 
+    #cols_8_floatbank_air = [f'primary_cleaner.state.floatbank8_{i}_air' for i in ['abcd']]
+    #cols_8_floatbank_lvl = [f'primary_cleaner.state.floatbank8_{i}_level' for i in ['abcd']]
 
+    #df_culled['rougher.state.floatbank10_mean_air'] = df_culled[cols_10_floatbank_air].mean(axis=1)
+    #df_culled['rougher.state.floatbank10_mean_level'] = df_culled[cols_10_floatbank_lvl].mean(axis=1)
 
-
-
-
-
-
-
-
-
+    #df_culled['rougher.state.floatbank8_mean_air'] = df_culled[cols_8_floatbank_air].mean(axis=1)
+    #df_culled['rougher.state.floatbank8_mean_level'] = df_culled[cols_8_floatbank_lvl].mean(axis=1)
 
     df_all['day'] = df_all['date'].dt.day / df_all['date'].dt.daysinmonth
 
@@ -76,9 +77,17 @@ def main(root=None):
     pc_df.to_pickle(f'{root}/data/processed/train_test_PCA.pkl')
 
     # Get tsfresh:
+    p_l = 36
+    p_s = 6
+    p_m = 24
+    df_tsfresh_feats_med = get_tsfresh_features(df_culled,max_timeshift=p_m)
+    df_tsfresh_feats_med.to_pickle(f'{root}/data/processed/train_test_tsfresh_{p_m}.pkl')
 
-    df_tsfresh_feats = get_tsfresh_features(df_all,max_timeshift=24)
-    df_tsfresh_feats.to_pickle(f'{root}/data/processed/train_test_tsfresh.pkl')
+    df_tsfresh_feats_long = get_tsfresh_features(df_culled, max_timeshift=p_l)
+    df_tsfresh_feats_long.to_pickle(f'{root}/data/processed/train_test_tsfresh_{p_m}.pkl')
+
+    df_tsfresh_feats_short = get_tsfresh_features(df_culled, max_timeshift=p_s)
+    df_tsfresh_feats_short.to_pickle(f'{root}/data/processed/train_test_tsfresh_{p_l}.pkl')
 
 
 def get_tsfresh_features(df=None, max_timeshift=10, n_jobs=10):
@@ -86,15 +95,11 @@ def get_tsfresh_features(df=None, max_timeshift=10, n_jobs=10):
     from tsfresh.utilities.dataframe_functions import impute
     from tsfresh.feature_extraction import extract_features
     import pandas as pd
-    d = {'median': None,
-         'mean': None,
-         'standard_deviation': None,
-         'skewness': None,
+    d = {'skewness': None,
          'kurtosis': None,
-         'quantile': [{'q': 0.15},
-                      {'q': 0.9}],
+         'quantile': [{'q': 0.01},
+                      {'q': 0.99}],
          'linear_trend': [
-             {'attr': 'rvalue'},
              {'attr': 'intercept'},
              {'attr': 'slope'}
          ]}
@@ -104,14 +109,19 @@ def get_tsfresh_features(df=None, max_timeshift=10, n_jobs=10):
     dfs = {}
     cols_to_calc = ["rougher.input.feed_fe",
     "rougher.input.feed_zn",
+    "rougher.input.feed_sol",
+    "rougher.input.feed_pb",
+    "rougher.input.feed_rate",
+    'rougher.input.floatbank11_xanthate',
+    'rougher.input.floatbank10_copper_sulfate',
+    'rougher.state.floatbank10_b_air',
     "secondary_cleaner.state.floatbank5_a_air",
     "primary_cleaner.input.copper_sulfate",
-    "rougher.input.feed_sol",
     "primary_cleaner.state.floatbank8_a_air",
-    "rougher.input.floatbank11_xanthate",
-    "rougher.input.feed_pb",
-    "primary_cleaner.state.floatbank8_b_air",
-    "primary_cleaner.input.depressant"]
+    "primary_cleaner.input.depressant",
+    "primary_cleaner.input.feed_size",
+    "primary_cleaner.input.xanthate"
+                    ]
 
 
     for c in cols_to_calc:
@@ -122,6 +132,7 @@ def get_tsfresh_features(df=None, max_timeshift=10, n_jobs=10):
                              impute_function=impute, show_warnings=False, default_fc_parameters=d, n_jobs=n_jobs)
         dfs[c] = X
     df_tsfresh_feats = pd.concat(dfs, keys=list(dfs.keys()))
+    df_tsfresh_feats.columns = [f'{i}_p{max_timeshift}' for i in df_tsfresh_feats.columns]
     return df_tsfresh_feats
 
 
