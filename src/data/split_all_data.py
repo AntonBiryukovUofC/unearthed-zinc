@@ -7,8 +7,10 @@ import pickle
 def split_data(root):
     # TSFRESH
 
-    df_tsfresh = pd.read_pickle(f'{root}/data/processed/train_test_tsfresh.pkl').reset_index(level=0)
+    df_tsfresh = pd.read_pickle(f'{root}/data/processed/train_test_tsfresh_p.pkl').reset_index(level=0)
     df_flat = df_tsfresh.pivot_table(index='id', columns=['level_0'])
+
+
     df_flat.index.names = ['date']
     df_flat.columns = ['_'.join(col).strip() for col in df_flat.columns.values]
 

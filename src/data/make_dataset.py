@@ -123,7 +123,6 @@ def get_tsfresh_features(df=None, max_timeshift=10, n_jobs=10):
     "primary_cleaner.input.xanthate"
                     ]
 
-
     for c in cols_to_calc:
         print(f'Working on {c}...')
         df_shift, y = make_forecasting_frame(df_tsfresh[c], kind="price", max_timeshift=max_timeshift,
