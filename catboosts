@@ -1,0 +1,31 @@
+Score 2.297 params {'max_depth': 8, 'l2_leaf_reg': 0.3173634151021207, 'random_strength': 18.96080881163158}
+Score 2.205 params {'max_depth': 7, 'l2_leaf_reg': 0.4297298337135557, 'random_strength': 0.5353117179626959}
+Score 2.270 params {'max_depth': 6, 'l2_leaf_reg': 0.7425398085288702, 'random_strength': 0.5335684279763367}
+Score 2.221 params {'max_depth': 6, 'l2_leaf_reg': 0.8035077142950233, 'random_strength': 0.4210979160567576}
+Score 2.303 params {'max_depth': 5, 'l2_leaf_reg': 1.397243120353385}
+Score 2.303 params {'max_depth': 5, 'l2_leaf_reg': 1.397243120353385}
+Score 2.223 params {'max_depth': 6, 'l2_leaf_reg': 8.660256742492987}
+Score 2.214 params {'max_depth': 5, 'l2_leaf_reg': 0.0379951132454176}
+Score 2.177 params {'max_depth': 4, 'l2_leaf_reg': 0.021889930700473965}
+Score 2.175 params {'max_depth': 5, 'l2_leaf_reg': 0.14295088648344106}
+Score 2.123 params {'max_depth': 4, 'l2_leaf_reg': 8.388929293128468}
+Score 2.142 params {'max_depth': 4, 'l2_leaf_reg': 11.31604169563017}
+Score 2.090 params {'max_depth': 4, 'l2_leaf_reg': 11.439572030845131}
+Score 2.180 params {'max_depth': 5, 'l2_leaf_reg': 18.559452050103598}
+Score 2.137 params {'max_depth': 4, 'l2_leaf_reg': 19.850269583753015}
+Score 2.160 params {'max_depth': 5, 'l2_leaf_reg': 6.38311895194424}
+Score 2.120 params {'max_depth': 4, 'l2_leaf_reg': 10.493890446410099}
+
+Quantiles - 55
+Score 2.065 params {'max_depth': 4, 'l2_leaf_reg': 3.7926533458959315} 
+Score 2.074 params {'max_depth': 4, 'l2_leaf_reg': 0.018420667566477804}
+Score 2.036 params {'max_depth': 3, 'l2_leaf_reg': 0.5073322664294757}
+Score 1.997 params {'max_depth': 3, 'l2_leaf_reg': 0.09132735850480254}
+Score 2.009 params {'max_depth': 3, 'l2_leaf_reg': 0.02050105933384481}
+Score 2.153 params {'max_depth': 4, 'l2_leaf_reg': 0.06981125890621646}
+quantiles 60
+{'max_depth': 4, 'l2_leaf_reg': 6.97} 
+{'max_depth': 4, 'l2_leaf_reg': 0.025} 
+
+
+

@@ -1,18 +1,16 @@
 import numpy as np
+from sklearn.model_selection import TimeSeriesSplit
+from sklearn.neighbors import KNeighborsRegressor
+from sklearn.preprocessing import QuantileTransformer
+from sklearn.decomposition import PCA
+from sklearn.pipeline import make_pipeline
+from sklearn.utils import indexable
+from sklearn.utils.validation import _num_samples
 
 np.random.seed(123)
-from sklearn import linear_model
-from sklearn.ensemble import RandomForestRegressor
-from skgarden import RandomForestQuantileRegressor,MondrianForestRegressor
-from sklearn.svm import SVR
-from sklearn.preprocessing import StandardScaler
 import xgboost as xgb
-from sklearn import neighbors
-from sklearn.preprocessing import Normalizer
-import keras
+import lightgbm as lgb
 from sklearn.metrics import make_scorer
-
-from xgboost.sklearn import XGBRegressor
 
 DROPCOLS = ['primary_cleaner.state.floatbank8_a_level',
             'rougher.state.floatbank10_a_level',
@@ -41,253 +39,7 @@ DROPCOLS = ['rougher.input.floatbank10_copper_sulfate',
             "secondary_cleaner.state.floatbank3_a_air"
             ]
 
-class Model(object):
 
-    def evaluate(self, X_val, y_val):
-        pred_target = self.predict(X_val)
-        err = mase(y_val, pred_target)
-        result = err
-        return result
-
-
-class LinearModel(Model):
-
-    def __init__(self, X_train, y_train, X_val, y_val, params={"l1_ratio": 0.5, "alpha": 1e0}):
-        super().__init__()
-        self.model = linear_model.ElasticNet(**params)
-        self.model.fit(X_train, y_train)
-        print("Result on validation data: ", self.evaluate(X_val, y_val))
-
-    def predict(self, feature):
-        return self.model.predict(feature)
-
-    def fit_final(self, X_train, y_train, params):
-        self.model.fit(X_train, y_train)
-
-    def score(self, X_val, y_val):
-        return self.evaluate(X_val, y_val)
-
-
-class RF(Model):
-
-    def __init__(self, X_train, y_train, X_val, y_val, kwargs={}):
-        super().__init__()
-        self.clf = RandomForestRegressor(**kwargs)
-        self.clf.fit(X_train, y_train)
-        print("Result on validation data: ", self.evaluate(X_val, y_val))
-
-    def predict(self, feature):
-        return self.clf.predict(feature)
-
-
-class QuantileRF(Model):
-
-    def __init__(self, X_train, y_train, X_val, y_val, params={}, quantile=50):
-        super().__init__()
-        self.quantile = quantile
-        self.model = RandomForestQuantileRegressor(**params)
-        self.model.fit(X_train, y_train)
-        print("Result on validation data: ", self.evaluate(X_val, y_val))
-
-    def fit_final(self, X_train, y_train, params):
-        self.model.fit(X_train, y_train)
-
-    def predict(self, feature):
-        return self.model.predict(feature, self.quantile)
-
-    def score(self, X_val, y_val):
-        return self.evaluate(X_val, y_val)
-
-
-
-class MondrianRF(Model):
-
-    def __init__(self, X_train, y_train, X_val, y_val, params={}):
-        super().__init__()
-        self.model = MondrianForestRegressor(**params)
-        self.model.fit(X_train, y_train)
-        print("Result on validation data: ", self.evaluate(X_val, y_val))
-
-    def fit_final(self, X_train, y_train, params):
-        self.model.fit(X_train, y_train)
-
-    def predict(self, feature):
-        return self.model.predict(feature)
-
-    def score(self, X_val, y_val):
-        return self.evaluate(X_val, y_val)
-
-class QuantileGB(Model):
-    def __init__(self, X_train, y_train, X_val, y_val, params={'n_estimators = 100'}, quantile=50):
-        super().__init__()
-        from sklearn.ensemble import GradientBoostingRegressor
-        self.quantile = quantile
-        self.model = GradientBoostingRegressor(loss='quantile', **params)
-        self.model.fit(X_train, y_train)
-
-        # print("Result on validation data: ", self.evaluate(X_val, y_val))
-
-    def fit_final(self, X_train, y_train, params):
-        self.model.fit(X_train, y_train)
-
-    def predict(self, feature):
-        return self.model.predict(feature)
-
-    def score(self, X_val, y_val):
-        return self.evaluate(X_val, y_val)
-
-
-class SVM(Model):
-
-    def __init__(self, X_train, y_train, X_val, y_val, kwargs={}):
-        super().__init__()
-        self.X_train = X_train
-        self.y_train = y_train
-        self.__normalize_data()
-        self.clf = SVR(**kwargs)
-
-        self.clf.fit(self.X_train, self.y_train)
-        print("Result on validation data: ", self.evaluate(X_val, y_val))
-
-    def __normalize_data(self):
-        self.scaler = StandardScaler()
-        self.X_train = self.scaler.fit_transform(self.X_train)
-
-    def predict(self, feature):
-        return self.clf.predict(feature)
-
-
-class XGBoost(Model):
-
-    def __init__(self, X_train, y_train, X_val, y_val, params={'nthread': -1,
-                                                               'max_depth': 10,
-                                                               'eta': 0.2,
-                                                               'objective': 'reg:linear',
-                                                               'colsample_bytree': 0.7,
-                                                               'subsample': 0.7,
-                                                               'num_round': 300,
-                                                               'early_stopping_rounds': 100,
-                                                               'verbose_eval': 50
-                                                               }):
-        super().__init__()
-
-        self.dtrain = xgb.DMatrix(X_train, label=y_train)
-        self.dvalid = xgb.DMatrix(X_val, label=y_val)
-        self.evallist = [(self.dtrain, 'train'), (self.dvalid, 'valid')]
-
-        self.bst = xgb.train(params, self.dtrain, params['num_round'], self.evallist,
-                             early_stopping_rounds=params['early_stopping_rounds'], verbose_eval=params['verbose_eval'])
-        print("Result on validation data: ", self.evaluate(X_val, y_val))
-
-    def fit_final(self, X_train, y_train, params):
-        self.dtrain = xgb.DMatrix(X_train, label=y_train)
-        evallist = [(self.dtrain, 'train')]
-        self.bst = xgb.train(params, self.dtrain, params['num_round'], evallist,
-                             early_stopping_rounds=params['early_stopping_rounds'], verbose_eval=params['verbose_eval'])
-
-    def predict(self, feature, params={}):
-        dtest = xgb.DMatrix(feature)
-        return self.bst.predict(dtest, **params)
-
-    def score(self, X_val, y_val):
-        return self.evaluate(X_val, y_val)
-
-
-class HistoricalMedian(Model):
-
-    def __init__(self, X_train, y_train, X_val, y_val):
-        super().__init__()
-        self.history = {}
-        self.feature_index = [1, 2, 3, 4]
-        for x, y in zip(X_train, y_train):
-            key = tuple(x[self.feature_index])
-            self.history.setdefault(key, []).append(y)
-        print("Result on validation data: ", self.evaluate(X_val, y_val))
-
-    def predict(self, features):
-        features = np.array(features)
-        features = features[:, self.feature_index]
-        hist_median = [np.median(self.history[tuple(feature)]) for feature in features]
-        return np.array(hist_median)
-
-
-class KNN(Model):
-
-    def __init__(self, X_train, y_train, X_val, y_val, params={"n_neighbors": 10, "weights": 'distance', "p": 1}):
-        super().__init__()
-        self.normalizer = Normalizer()
-        self.normalizer.fit(X_train)
-        self.model = neighbors.KNeighborsRegressor(**params)
-        self.model.fit(self.normalizer.transform(X_train), y_train)
-        print("Result on validation data: ", self.evaluate(self.normalizer.transform(X_val), y_val))
-
-    def predict(self, feature):
-        return self.model.predict(self.normalizer.transform(feature))
-
-    def fit_final(self, X_train, y_train, params):
-        self.model.fit(self.normalizer.transform(X_train), y_train)
-
-    def score(self, X_val, y_val):
-        return self.evaluate(X_val, y_val)
-
-
-def tilted_loss(q, y, f):
-    e = (y - f)
-    return keras.backend.mean(keras.backend.maximum(q * e, (q - 1) * e),
-                              axis=-1)
-
-
-class QuantileKeras(Model):
-
-    def __init__(self, X_train, y_train, X_val, y_val, epochs=100, lr=0.001, quantile=0.5, input_dim=400,
-                 batch_size=128):
-        super().__init__()
-        self.epochs = epochs
-        self.input_dim = input_dim
-        self.batch_size = batch_size
-        self.checkpointer = keras.callbacks.ModelCheckpoint(filepath="best_model_weights.hdf5", verbose=1,
-                                                            save_best_only=True)
-        self.early_stop = keras.callbacks.EarlyStopping(monitor='val_loss', patience=20)
-        self.__build_keras_model(lr)
-        X_train = np.expand_dims(X_train, 1)
-        X_val = np.expand_dims(X_val, 1)
-        self.quantile = quantile
-        self.max_y = max(np.max(y_train), np.max(y_val))
-        self.fit(X_train, y_train, X_val, y_val)
-
-    def __build_keras_model(self, lr):
-        from keras.models import Sequential
-        from keras.layers import Dense, Activation
-        from keras.optimizers import Adam
-        self.model = Sequential()
-        self.model.add(Dense(1000, kernel_initializer="uniform", input_dim=self.input_dim))
-        self.model.add(Activation('relu'))
-        self.model.add(Dense(500, kernel_initializer="uniform"))
-        self.model.add(Activation('relu'))
-        self.model.add(Dense(1))
-        self.model.add(Activation('sigmoid'))
-
-        self.model.compile(loss=lambda y, f: tilted_loss(self.quantile, y, f), optimizer=Adam(lr=lr))
-
-    def _val_for_fit(self, val):
-        val = np.log(val) / np.log(self.max_y)
-        return val
-
-    def _val_for_pred(self, val):
-        return np.exp(val) * self.max_y
-
-    #
-    def fit(self, X_train, y_train, X_val, y_val):
-        self.model.fit(X_train, self._val_for_fit(y_train),
-                       validation_data=(X_val, self._val_for_fit(y_val)),
-                       epochs=self.epochs, batch_size=self.batch_size,
-                       callbacks=[self.checkpointer, self.early_stop], verbose=1)
-        # self.model.load_weights('best_model_weights.hdf5')
-        print("Result on validation data: ", self.evaluate(X_val, y_val))
-
-    def predict(self, features):
-        result = self.model.predict(features).flatten()
-        return self._val_for_pred(result)
 
 
 def _mase_numeric_only(predicted, measured):
@@ -323,47 +75,14 @@ def mase(predicted, measured, min_samples=3):
 
     return score
 
-def mase_error(y_true,y_pred):
-    return mase(y_pred,y_true)
+
 
 def my_custom_scorer():
-    return make_scorer(mase_error, greater_is_better=False)
-
-#     def __build_keras_model(self):
-#         self.model = Sequential()
-#         self.model.add(Dense(1000, kernel_initializer="uniform", input_dim=1183))
-#         self.model.add(Activation('relu'))
-#         self.model.add(Dense(500, kernel_initializer="uniform"))
-#         self.model.add(Activation('relu'))
-#         self.model.add(Dense(1))
-#         self.model.add(Activation('sigmoid'))
-#
-#         self.model.compile(loss='mean_absolute_error', optimizer='adam')
-#
-#     def _val_for_fit(self, val):
-#         val = numpy.log(val) / self.max_log_y
-#         return val
-#
-#     def _val_for_pred(self, val):
-#         return numpy.exp(val * self.max_log_y)
-#
-#     def fit(self, X_train, y_train, X_val, y_val):
-#         self.model.fit(X_train, self._val_for_fit(y_train),
-#                        validation_data=(X_val, self._val_for_fit(y_val)),
-#                        epochs=self.epochs, batch_size=128,
-#                        # callbacks=[self.checkpointer],
-#                        )
-#         # self.model.load_weights('best_model_weights.hdf5')
-#         print("Result on validation data: ", self.evaluate(X_val, y_val))
-#
-#     def predict(self, features):
-#         result = self.model.predict(features).flatten()
-#         return self._val_for_pred(result)
+    return make_scorer(mase, greater_is_better=False)
 
 
 def train_model(X, y, folds, model=None, score=mase, params=None, fixed_length=False, train_splits=None,
                 test_splits=None):
-    import time
     import pandas as pd
     scores = []
     feature_importance = pd.DataFrame()
@@ -385,10 +104,6 @@ def train_model(X, y, folds, model=None, score=mase, params=None, fixed_length=F
 
 #
 
-from sklearn.model_selection import TimeSeriesSplit
-from sklearn.utils import indexable
-from sklearn.utils.validation import _num_samples
-import numpy as np
 
 
 class TimeSeriesSplitImproved(TimeSeriesSplit):
@@ -465,3 +180,314 @@ class TimeSeriesSplitImproved(TimeSeriesSplit):
             for test_start in test_starts:
                 yield (indices[:test_start],
                        indices[test_start:test_start + test_size])
+
+
+# This function takes one model and fit it to the train and test data
+# It returns the model MASE, CV prediction, and test prediction
+# Create a function to fit a base model on K-1 folds, predict on 1 fold
+def base_fit(model, folds, features, target, trainData, testData):
+    # Initialize empty lists and matrix to store data
+    model_mase = []
+    model_val_predictions = np.empty((trainData.shape[0], 1))
+    k = 0
+    # Loop through the index in KFolds
+    model_test_predictions = np.zeros((testData.shape[0],))
+    model_val_true = np.zeros((trainData.shape[0], 1))
+
+    for train_index, val_index in folds.split(trainData):
+        k = k + 1
+        # Split the train data into train and validation data
+        train, validation = trainData.iloc[train_index], trainData.iloc[val_index]
+        # Get the features and target
+        train_features, train_target = train[features], train[target]
+        validation_features, validation_target = validation[features], validation[target]
+
+        # Fit the base model to the train data and make prediciton for validation data
+        if (model.__class__ == xgb.sklearn.XGBRegressor) | (model.__class__ == lgb.sklearn.LGBMRegressor):
+            print('Fitting a boost model with limited tree rounds')
+            evalset = [(validation_features, np.ravel(validation_target))]
+            model.fit(train_features, np.ravel(train_target), eval_set=evalset, early_stopping_rounds=20, verbose=False)
+        else:
+            model.fit(train_features, train_target.values)
+
+        if (model.__class__ == xgb.sklearn.XGBRegressor):
+            print(model.best_ntree_limit)
+            print('Using xgboost with limited tree rounds')
+            validation_predictions = model.predict(validation_features, ntree_limit=model.best_ntree_limit)
+
+        elif (model.__class__ == lgb.sklearn.LGBMRegressor):
+            print(model.best_iteration_)
+            print('Using lgbmboost with limited tree rounds')
+            validation_predictions = model.predict(validation_features, num_iteration=model.best_iteration_)
+        else:
+            print('Using generic predict')
+            validation_predictions = model.predict(validation_features)
+
+        # Calculate and store the MASE for validation data
+        print(mase(validation_predictions, validation_target))
+        # model_mase.append(mase(validation_predictions,validation_target))
+
+        # Save the validation prediction for level 1 model training
+        model_val_predictions[val_index, 0] = validation_predictions.reshape(validation.shape[0])
+        model_val_true[val_index, 0] = validation_target.values
+        model_test_predictions += model.predict(testData[features])
+
+    model_test_predictions = model_test_predictions / k
+    # Fit the base model to the whole training data
+    # model.fit(trainData[features], np.ravel(trainData[target]))
+    # Get base model prediction for the test data
+    # model_test_predictions = model.predict(testData[features])
+    # Calculate and store the MASE for validation data
+
+    # model_val_predictions = model_val_predictions
+    model_mase.append(mase(model_val_predictions, model_val_true))
+
+
+# Create a function to fit a dictionary of models, and get their OOF predictions from the training data
+# Function that takes a dictionary of models and fits it to the data using baseFit
+# The results of the models are then aggregated and returned for level 1 model training
+def stacks(level0_models, folds, features, target, trainData, testData):
+    num_models = len(level0_models.keys())  # Number of models
+
+    # Initialize empty lists and matrix
+    level0_trainFeatures = np.empty((trainData.shape[0], num_models))
+    level0_testFeatures = np.empty((testData.shape[0], num_models))
+
+    # Loop through the models
+    for i, key in enumerate(level0_models.keys()):
+        print('Fitting %s -----------------------' % (key))
+        model_mase, val_predictions, test_predictions = base_fit(level0_models[key], folds, features, target, trainData,
+                                                                 testData)
+
+        # Print the average MASE for the model
+        print('%s average MASE: %s' % (key, np.mean(model_mase)))
+        print('\n')
+
+        # Aggregate the base model validation and test data predictions
+        level0_trainFeatures[:, i] = val_predictions.reshape(trainData.shape[0])
+        level0_testFeatures[:, i] = test_predictions.reshape(testData.shape[0])
+
+    return (level0_trainFeatures, level0_testFeatures)
+
+
+# Function that takes a dictionary of classifiers and train them on base model predictions
+def stackerTraining(stacker, folds, level0_trainFeatures, trainData, target=None):
+    for k in stacker.keys():
+        print('Training stacker %s' % (k))
+        stacker_model = stacker[k]
+        y_pred = np.zeros_like(trainData[target].values)
+        y_true = np.zeros_like(trainData[target].values)
+        for t, v in folds.split(trainData, trainData[target]):
+            train, validation = level0_trainFeatures[t, :], level0_trainFeatures[v, :]
+            # Get the features and target
+            train_features, train_target = train, trainData.iloc[t][target]
+            validation_features, validation_target = validation, trainData.iloc[v][target]
+
+            if (stacker_model.__class__ == xgb.sklearn.XGBRegressor) | (
+                    stacker_model.__class__ == lgb.sklearn.LGBMRegressor):
+                print('Fitting a boost model with limited tree rounds')
+                evalset = [(validation_features, np.ravel(validation_target))]
+                stacker_model.fit(train_features, np.ravel(train_target), eval_set=evalset, early_stopping_rounds=20,
+                                  verbose=False)
+                print(stacker_model.best_iteration_)
+            else:
+                stacker_model.fit(level0_trainFeatures[t, :], train_target)
+
+            y_pred[v] = stacker_model.predict(level0_trainFeatures[v])
+            y_true[v] = trainData.iloc[v][target].values
+
+        stacker_mase = mase(y_pred, y_true)
+        average_mase = mase(level0_trainFeatures.mean(axis=1), y_true)
+        print('%s Stacker MASE: %s' % (k, stacker_mase))
+        print('%s Averaging MASE: %s' % (k, average_mase))
+
+
+DROPCOLS_DIFF_FINAL = [
+    "diff_week",
+    "diff_encod_rel_primary_cleaner.input.copper_sulfate",
+    "diff_dayw",
+    "diff_encod_rel_primary_cleaner.input.depressant",
+    "diff_encod_rel_rougher.input.feed_pb",
+    "diff_encod_dif_primary_cleaner.input.depressant",
+    "diff_encod_val_primary_cleaner.input.feed_size",
+    "diff_encod_rel_primary_cleaner.input.xanthate",
+    "diff_encod_dif_primary_cleaner.input.xanthate",
+    "diff_daily_avg_final",
+    "diff_encod_dif_primary_cleaner.input.feed_size",
+    "diff_encod_rel_primary_cleaner.state.floatbank8_a_level",
+    "diff_encod_dif_primary_cleaner.state.floatbank8_a_level",
+    "diff_hour",
+    "diff_daily_avg_rougher",
+    "diff_rougher.state.floatbank10_b_level",
+    "diff_primary_cleaner.input.feed_size",
+    "diff_primary_cleaner.state.floatbank8_a_air",
+    "diff_primary_cleaner.state.floatbank8_a_level",
+    "diff_primary_cleaner.state.floatbank8_d_air",
+    "diff_rougher.input.feed_fe",
+    "diff_rougher.input.floatbank11_copper_sulfate",
+    "diff_rougher.state.floatbank10_a_air",
+    "diff_rougher.state.floatbank10_a_level",
+    "diff_rougher.state.floatbank10_c_level",
+    "diff_secondary_cleaner.state.floatbank6_a_level",
+    "diff_rougher.state.floatbank10_d_air",
+    "diff_rougher.state.floatbank10_d_level",
+    "diff_secondary_cleaner.state.floatbank2_a_air",
+    "diff_secondary_cleaner.state.floatbank2_b_air",
+    "diff_secondary_cleaner.state.floatbank2_b_level",
+    "diff_secondary_cleaner.state.floatbank3_b_level",
+    "diff_secondary_cleaner.state.floatbank4_a_level",
+    "diff_secondary_cleaner.state.floatbank5_a_air",
+    "diff_secondary_cleaner.state.floatbank5_b_air",
+    "diff_secondary_cleaner.state.floatbank5_b_level",
+    "diff_rougher.state.floatbank10_e_level",
+    "diff_encod_val_primary_cleaner.input.copper_sulfate",
+
+]
+
+DROPCOLS_FINAL = [
+    "primary_cleaner.state.floatbank8_b_level",
+    "encod_rel_primary_cleaner.input.depressant",
+    "secondary_cleaner.state.floatbank2_a_level",
+    "rougher.state.floatbank10_e_level",
+    "rougher.state.floatbank10_d_level",
+    "encod_dif_primary_cleaner.input.depressant",
+    "secondary_cleaner.state.floatbank3_a_level",
+    "primary_cleaner.state.floatbank8_a_level",
+    "hour",
+    "secondary_cleaner.state.floatbank4_a_level",
+    "secondary_cleaner.state.floatbank3_b_level",
+    "secondary_cleaner.state.floatbank5_a_level",
+    "encod_val_rougher.input.feed_zn",
+    "encod_rel_primary_cleaner.state.floatbank8_a_level",
+    "secondary_cleaner.state.floatbank2_b_level",
+    "encod_val_primary_cleaner.input.feed_size",
+    "secondary_cleaner.state.floatbank6_a_level",
+    "rougher.state.floatbank10_a_level",
+    "encod_dif_primary_cleaner.state.floatbank8_a_level",
+    "secondary_cleaner.state.floatbank3_a_level"
+]
+
+DROPCOLS_DIFF_ROUGHER = [
+    "diff_rougher.state.floatbank10_c_air",
+    "diff_rougher.state.floatbank10_b_air",
+    "diff_encod_dif_rougher.input.feed_zn",
+    "diff_rougher.input.feed_size",
+    "diff_rougher.state.floatbank10_f_air",
+    "diff_encod_val_rougher.input.feed_fe",
+    "diff_rougher.input.feed_rate",
+    "diff_encod_rel_rougher.input.feed_fe",
+    "diff_rougher.state.floatbank10_d_level",
+    "diff_encod_dif_rougher.input.feed_fe",
+    "diff_rougher.state.floatbank10_a_air",
+    "diff_encod_dif_rougher.input.feed_pb",
+    "diff_encod_rel_rougher.input.feed_pb",
+    "diff_rougher.state.floatbank10_b_level",
+    "diff_rougher.state.floatbank10_a_level",
+    "diff_hour",
+    "diff_daily_avg_rougher",
+    "diff_rougher.state.floatbank10_f_level",
+    "diff_rougher.state.floatbank10_e_level",
+    "diff_rougher.state.floatbank10_e_air",
+    "diff_dayw"
+]
+DROPCOLS_ROUGHER = [
+    "rougher.state.floatbank10_f_level"
+]
+
+COLS_TO_DIFF_TOP10 = set([
+    # these matter for Final
+    "rougher.input.feed_zn",
+    "primary_cleaner.input.xanthate",
+    "rougher.input.floatbank10_xanthate",
+    "rougher.input.feed_pb",
+    "primary_cleaner.input.depressant",
+    "encod_val_rougher.input.feed_zn",
+    "rougher.input.floatbank11_xanthate",
+    "primary_cleaner.state.floatbank8_d_level"
+    "rougher.input.floatbank10_copper_sulfate"
+    "encod_val_rougher.input.feed_pb",
+    "primary_cleaner.state.floatbank8_c_level"
+    "rougher.input.feed_sol",
+    "primary_cleaner.state.floatbank8_c_air"
+    "primary_cleaner.input.copper_sulfate",
+    # these come from Rougher (deleted the duplicates)
+    "rougher.input.floatbank11_xanthate",
+    "encod_val_rougher.input.feed_zn",
+    "rougher.input.feed_fe",
+    "rougher.state.floatbank10_d_air",
+    "rougher.state.floatbank10_c_level",
+    "encod_val_rougher.input.feed_pb",
+    "encod_rel_rougher.input.feed_zn",
+    "rougher.input.floatbank11_copper_sulfate",
+    "rougher.input.feed_sol",
+    "rougher.input.feed_size"
+])
+#
+# COLS_TO_DIFF_TOP20 = [
+#
+# ]
+level0_models_rougher = {}
+obj = 'mae'
+level0_models_rougher['LGBM_rougher_base_a'] = lgb.LGBMRegressor(objective=obj,
+                                                                 learning_rate=0.05, n_estimators=500, random_state=91,
+                                                                 **{'max_depth': 5, 'num_leaves': 100, 'feature_fraction': '0.363', 'bagging_fraction': '0.262'})
+level0_models_rougher['LGBM_rougher_base_b'] =lgb.LGBMRegressor(objective=obj,
+                                                                learning_rate=0.05, n_estimators=500, random_state=92,
+                                                                **{'max_depth': 4, 'num_leaves': 110, 'feature_fraction': '0.448', 'bagging_fraction': '0.445'})
+level0_models_rougher['LGBM_rougher_base_c'] =lgb.LGBMRegressor(objective=obj,
+                                                                learning_rate=0.05, n_estimators=500, random_state=93,
+                                                                **{'max_depth': 4, 'num_leaves': 155, 'feature_fraction': '0.449', 'bagging_fraction': '0.598'})
+level0_models_rougher['LGBM_rougher_base_d'] =lgb.LGBMRegressor(objective=obj,
+                                                                learning_rate=0.05, n_estimators=500, random_state=94,
+                                                                **{'max_depth': 5, 'num_leaves': 210, 'feature_fraction': '0.472', 'bagging_fraction': '0.682'})
+level0_models_rougher['LGBM_rougher_base_e']= lgb.LGBMRegressor(objective=obj,
+                                                                learning_rate=0.05, n_estimators=500, random_state=7,
+                                                                **{'max_depth': 5, 'num_leaves': 200, 'feature_fraction': '0.45', 'bagging_fraction': '0.72'})
+level0_models_rougher['LGBM_rougher_base_f']= lgb.LGBMRegressor(objective=obj,
+                                                                learning_rate=0.07, n_estimators=500, random_state=8,
+                                                                **{'max_depth': 4, 'num_leaves': 63, 'feature_fraction': '0.879', 'bagging_fraction': '0.727'})
+level0_models_rougher['LGBM_rougher_base_g']= lgb.LGBMRegressor(objective=obj,
+                                                                learning_rate=0.07, n_estimators=500, random_state=9,
+                                                                **{'max_depth': 5, 'num_leaves': 65, 'feature_fraction': '0.879', 'bagging_fraction': '0.727'})
+level0_models_rougher['LGBM_rougher_base_h']= lgb.LGBMRegressor(objective=obj,
+                                                                learning_rate=0.07, n_estimators=500, random_state=10,
+                                                                **{'max_depth': 4, 'num_leaves': 60, 'feature_fraction': '0.797', 'bagging_fraction': '0.982'})
+level0_models_rougher['LGBM_rougher_base_i'] = lgb.LGBMRegressor(objective=obj,
+                                                                 learning_rate=0.07, n_estimators=500, random_state=12,
+                                                                 **{'max_depth': 5, 'num_leaves': 60, 'feature_fraction': '0.8', 'bagging_fraction': '0.92'})
+# level0_models['KNN_rougher_a'] = make_pipeline(scaler,KNeighborsRegressor(n_jobs = -1,**{'n_neighbors': 254, 'weights': 'distance', 'leaf_size': 16}))
+scaler = make_pipeline(QuantileTransformer(output_distribution='normal'),PCA(whiten=True))
+level0_models_rougher['KNN_rougher_b'] = make_pipeline(scaler, KNeighborsRegressor(n_jobs = -1, **{'n_neighbors': 50, 'weights': 'distance', 'leaf_size': 18}))
+level0_models_rougher['KNN_rougher_c'] = make_pipeline(scaler, KNeighborsRegressor(n_jobs = -1, **{'n_neighbors': 15, 'weights': 'distance', 'leaf_size': 30.0}))
+level0_models_rougher['KNN_rougher_d'] = make_pipeline(scaler, KNeighborsRegressor(n_jobs = -1, **{'n_neighbors': 5, 'weights': 'uniform', 'leaf_size': 24.0}))
+level0_models_rougher['KNN_rougher_b_bray'] = make_pipeline(scaler, KNeighborsRegressor(n_jobs = -1, **{'n_neighbors': 50, 'weights': 'distance', 'metric': 'braycurtis', 'leaf_size': 18}))
+level0_models_rougher['KNN_rougher_c_bray'] = make_pipeline(scaler, KNeighborsRegressor(n_jobs = -1, **{'n_neighbors': 15, 'weights': 'distance', 'leaf_size': 30.0, 'metric': 'braycurtis'}))
+level0_models_rougher['KNN_rougher_d_bray'] = make_pipeline(scaler, KNeighborsRegressor(n_jobs = -1, **{'n_neighbors': 5, 'weights': 'uniform', 'leaf_size': 24.0, 'metric': 'braycurtis'}))
+
+
+
+level0_models_final ={}
+level0_models_final['LGBM_final_base_a'] = lgb.LGBMRegressor(objective='mae',
+                              learning_rate=0.05, n_estimators=400,random_state=96,
+                              **{'max_depth': 6, 'num_leaves': 10, 'feature_fraction': '0.411', 'bagging_fraction': '0.827'})
+
+level0_models_final['LGBM_final_base_b'] =lgb.LGBMRegressor(objective='mae',
+                              learning_rate=0.05, n_estimators=400,random_state=973,
+                              **{'max_depth': 6, 'num_leaves': 15, 'feature_fraction': '0.515', 'bagging_fraction': '0.469'})
+
+level0_models_final['LGBM_final_base_c'] =lgb.LGBMRegressor(objective='mae',
+                              learning_rate=0.05, n_estimators=400,random_state=937,
+                              **{'max_depth': 3, 'num_leaves': 195, 'feature_fraction': '0.635', 'bagging_fraction': '0.673'})
+level0_models_final['LGBM_final_base_d'] =lgb.LGBMRegressor(objective='mae',
+                              learning_rate=0.05, n_estimators=400,random_state=49,
+                              **{'max_depth': 4, 'num_leaves': 70, 'feature_fraction': '0.795', 'bagging_fraction': '0.656'})
+
+level0_models_final['KNN_final_b'] = make_pipeline(scaler,KNeighborsRegressor(n_jobs = -1,**{'n_neighbors': 50, 'weights': 'distance', 'leaf_size': 18}))
+level0_models_final['KNN_final_c'] = make_pipeline(scaler,KNeighborsRegressor(n_jobs = -1,**{'n_neighbors': 15, 'weights': 'distance', 'leaf_size': 30.0}))
+level0_models_final['KNN_final_d'] = make_pipeline(scaler,KNeighborsRegressor(n_jobs = -1,**{'n_neighbors': 5, 'weights': 'uniform', 'leaf_size': 24.0}))
+
+level0_models_final['KNN_rougher_b_bray'] = make_pipeline(scaler,KNeighborsRegressor(n_jobs = -1,**{'n_neighbors': 50, 'weights': 'distance','metric':'braycurtis', 'leaf_size': 18}))
+level0_models_final['KNN_rougher_c_bray'] = make_pipeline(scaler,KNeighborsRegressor(n_jobs = -1,**{'n_neighbors': 15, 'weights': 'distance', 'leaf_size': 30.0,'metric':'braycurtis'}))
+level0_models_final['KNN_rougher_d_bray'] = make_pipeline(scaler,KNeighborsRegressor(n_jobs = -1,**{'n_neighbors': 5, 'weights': 'uniform', 'leaf_size': 24.0,'metric':'braycurtis'}))
+
+
