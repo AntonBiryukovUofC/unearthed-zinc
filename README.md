@@ -14,6 +14,45 @@ using `tsfresh` library. The features are created by looking back at at most `N`
 
 The details can be found in the `src/data/make_dataset.py`
 
+If make_dataset causes an error in the process - that could be due to one of the aggregate summaries i custom-added into tsfresh. Unfortunately,
+the package does not have a **nice** way to add custom aggregates other than going into the package sources and monkey patching. Feel free to 
+comment them out (`max_min_diff, max_slope, min_slope`), since i added them fairly recently, and they did not affect the submission on Feb 23 in any way.
+
+If anything, the source code for those is:
+
+    
+    @set_property("fctype", "simple")
+    def max_min_diff(x):
+        # Calculation of feature as float, int or bool
+        if not isinstance(x, (np.ndarray, pd.Series)):
+            x = np.asarray(x)
+        f = np.max(x) - np.min(x)
+        return f
+
+    
+    @set_property("fctype", "simple")
+    def max_slope(x):
+        # Calculation of feature as float, int or bool
+        if not isinstance(x, (np.ndarray, pd.Series)):
+            x = np.asarray(x)
+        try:
+            f = np.max(np.diff(x))
+        except ValueError:
+            f = 0
+        return f
+    
+    @set_property("fctype", "simple")
+    def min_slope(x):
+        # Calculation of feature as float, int or bool
+        if not isinstance(x, (np.ndarray, pd.Series)):
+            x = np.asarray(x)
+        try:
+            f = np.min(np.diff(x))
+        except ValueError:
+            f = 0
+        return f
+
+
 2. Proceed by splitting the data into train and test, as well as augmenting the datasets further by calculating the encodings of select features:
 that is, predict them from the rest of the input features, and append to the features matrix.
 
@@ -31,7 +70,8 @@ are free to examine in the `make_dataset.py` file. They allowed me to achieve th
 However, that does not mean they will be useless in the production case scenario, where the crossvalidation / holdout scheme as well as training methodology 
 (online vs static batch as we did in the competition is used).  
 
-6. Moreover, all the submissions can be checked in the `results` folder.
+6. Moreover, all the submissions can be checked in the `results` folder, as well as `subs.xlsx` where I kept track of all submissions since you guys wanted to 
+pick the best out of all.
 7. There's also a plentiful of notebooks with some experimental stacking codes, that were also used to create submissions midway in the competition, that are 
 now basically deprecated and can be fully replaced with the methodology in p.3. You can find them under `notebooks`
 

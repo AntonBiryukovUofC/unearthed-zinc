@@ -167,9 +167,9 @@ def get_tsfresh_features(df=None, max_timeshift=10, n_jobs=10):
                  {'aggtype': "skew"},
                  {'aggtype': "kurtosis"}
              ],
-             'max_min_diff': None,
-             'max_slope': None,
-             'min_slope': None
+          #   'max_min_diff': None,
+          #   'max_slope': None,
+          #   'min_slope': None
              }
     else:
         d = {'mean': None,
@@ -177,9 +177,9 @@ def get_tsfresh_features(df=None, max_timeshift=10, n_jobs=10):
              'minimum': None,
              'mean_abs_change': None,
              'mean_second_derivative_central': None,
-             'max_min_diff': None,
-             'max_slope': None,
-             'min_slope': None
+           #  'max_min_diff': None,
+           #  'max_slope': None,
+           #  'min_slope': None
              }
 
     df = df.fillna(method='ffill')
