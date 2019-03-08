@@ -31,6 +31,10 @@ are free to examine in the `make_dataset.py` file. They allowed me to achieve th
 However, that does not mean they will be useless in the production case scenario, where the crossvalidation / holdout scheme as well as training methodology 
 (online vs static batch as we did in the competition is used).  
 
+6. Moreover, all the submissions can be checked in the `results` folder.
+7. There's also a plentiful of notebooks with some experimental stacking codes, that were also used to create submissions midway in the competition, that are 
+now basically deprecated and can be fully replaced with the methodology in p.3. You can find them under `notebooks`
+
 
 
 Project Organization
