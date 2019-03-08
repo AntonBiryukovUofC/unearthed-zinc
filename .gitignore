@@ -90,6 +90,7 @@ target/
 # Data
 ./data/
 results/
+data/
 ./results/
 results/
 *.pkl

@@ -4,20 +4,21 @@ unearthed-zinc
 project repo for zinc
 
 
-Ideas to try:
-====================
+How & what to run:
+=================================
 
-This competition has a causality rule: that is, model predictions on a test dataset 
-cannot be inferred using future (e.g. unavailable information) training data. Therefore, in this case
-crossvalidation needs some careful thought.
+1. Start with placing the original dataset in the form it was distributed (a zip file) under `data/raw`.
+ Then run in the root directory:
+`make data` to create the dataset with a little bit of simple preprocessing (dropping NA, filling NA in the inputs), as well as creating additional time aggregated features
+using `tsfresh` library. The features are created by looking back at at most `N` points for each row and then aggregating the columns using functions passed as a dictionary.
 
+The details can be found in the `src/data/make_dataset.py`
 
-Here's ideas to try:
+2. Proceed by splitting the data into train and test, as well as augmenting the datasets further by calculating the encodings of select features:
+that is, predict them from the rest of the input features, and append to the features matrix.
 
-- Build 2x2 models: 2 for each target, and 2 for each year:
-    + The model predicting on the end of 2016 can only use data prior to September 2016
-    + The model predicting on the end of 2017 can use data prior to that (i.e. the training set from 2016 + 
-        training from 2017)
+3. Run `train_stack_with_knn_enet.py` to train a dictionary of models for both targets, with a simpler meta-estimator on top of them
+
 
 
 Project Organization
