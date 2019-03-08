@@ -7,7 +7,7 @@ project repo for zinc
 How & what to run:
 =================================
 
-1. Start with placing the original dataset in the form it was distributed (a zip file) under `data/raw`.
+Start with placing the original dataset in the form it was distributed (a zip file) under `data/raw`.
  Then run in the root directory:
 `make data` to create the dataset with a little bit of simple preprocessing (dropping NA, filling NA in the inputs), as well as creating additional time aggregated features
 using `tsfresh` library. The features are created by looking back at at most `N` points for each row and then aggregating the columns using functions passed as a dictionary.
@@ -17,7 +17,19 @@ The details can be found in the `src/data/make_dataset.py`
 2. Proceed by splitting the data into train and test, as well as augmenting the datasets further by calculating the encodings of select features:
 that is, predict them from the rest of the input features, and append to the features matrix.
 
-3. Run `train_stack_with_knn_enet.py` to train a dictionary of models for both targets, with a simpler meta-estimator on top of them
+3. Run `train_stack_with_knn_enet.py` to train a dictionary of models for both targets, with a simpler meta-estimator on top of them.
+4. Further in the competition, as i kept progressing on the public LB and as my main pipelines became more sophisticated, i started blending models 
+in a semi-automatic way, using the following method:
+    - run `importance_lgb.py` script to get the importances of variables using mean absolute SHAP value approach,
+        saving the sorted lists of features in the `notebooks` folder
+    - run `models/hyperopt_model_cv2018_rougher.py` or `models/hyperopt_model_cv2018_final.py` to find a set of optimal parameters for `LGBMRegressor()`
+    for each of the targets through CV on all 2018 data
+    - run `train_stack.py` (for `rougher.output.recovery`) or `train_stack_final.py` (for `final.output.recovery`)
+    
+5. I have also included a few more features in the dataset that calculate lag differences and higher order derivatives with a **lookback**, that you 
+are free to examine in the `make_dataset.py` file. They allowed me to achieve the 4.68 on the public leaderboard, but did not seem to help much on private.
+However, that does not mean they will be useless in the production case scenario, where the crossvalidation / holdout scheme as well as training methodology 
+(online vs static batch as we did in the competition is used).  
 
 
 
